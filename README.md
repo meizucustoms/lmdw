@@ -46,3 +46,5 @@ Done! Now you should do 'repo sync' in /home/roman/lmdw_test.
 ## Other
 
 You can find database syntaxes in lmdwSyntax folder.
+
+Settings are placed around 100 line of script.
