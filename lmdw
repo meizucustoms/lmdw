@@ -1,0 +1,497 @@
+#!/bin/bash
+##################################################
+#
+# You can find settings in ~50 lines down
+# OR
+# You can specify settings in your database
+#
+##################################################
+
+# Colors
+nc='\e[0m';ic='\e[1;34m';dc='\e[1;30m';wc='\e[1;33m';ec='\e[1;31m';
+
+function log() {
+    if [ ! -z "$1" ] || [ ! -z "$2" ] || [ ! -z "$3" ]; then
+        case "$2" in
+        E) echo -e $ec"E: $1: $3"$nc
+        exit 1
+        ;;
+        W) echo -e $wc"W: $1: $3"$nc
+        ;;
+        I) echo -e $ic"I: $1: $3"$nc
+        ;;
+        D)
+        if [ "$LMDWG_LOG_DEBUG" = "true" ]; then
+            echo -e $dc"D: $1: $3"$nc
+        else
+            echo -e "D: $1: $3" > ~/.lmdw.debug.log
+        fi
+        ;;
+        nodebug) 
+        if [ "$3" = "true" ]; then
+            LMDWG_LOG_DEBUG="false"
+        else
+            LMDWG_LOG_DEBUG="true"
+        fi
+        ;;
+        *) echo -e $ec"E: log: Unknown option."$nc
+        ;;
+        esac
+    else
+        echo -e $ec"E: log: Not enough arguments."$nc
+    fi
+}
+
+log set nodebug false # necessary
+LMDWG_VARIABLE_PREFIX="LMDW"
+
+function setVar() {
+    if [ ! -z "$1" ] || [ ! -z "$2" ]; then
+        if [ "$1" = "VARIABLE_PREFIX" ]; then
+            export LMDWG_VARIABLE_PREFIX="$2"
+        elif [ "$1" = "LOG_DEBUG" ]; then
+            export LMDWG_LOG_DEBUG="$2"
+        else
+            export "$LMDWG_VARIABLE_PREFIX"_$1="$2"
+        fi
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+##################################################
+#                   SETTINGS                     #
+##################################################
+# Print debugging info; default: false.
+setVar LOG_DEBUG                "false"
+# Prefix for variables; default: LMDW. Example: $LMDW_HELLO_WORLD
+setVar VARIABLE_PREFIX          "LMDW"
+# Used only with LOCAL_DATABASE - true; path to the local database
+setVar DATABASE_URL             "NULL"
+# Use local database; not online.
+setVar LOCAL_DATABASE           "true"
+# Used only with LOCAL_DATABASE - true; path to the local database
+setVar LOCAL_DATABASE_PATH      "lmdwExample"
+# Compatible syntax version.
+setVar SYNTAX_PARSER_VERSION    "v0.1a"
+# Set how many databases in temp should be to clean temp folder.
+setVar DIRTY_COUNT              "10"
+##################################################
+
+function readVar() {
+    if [ ! -z "$1" ]; then
+        eval "echo \$$LMDWG_VARIABLE_PREFIX"_"$1"
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function randomString() {
+    if [ ! -z "$1" ]; then
+        echo "$(cat /dev/urandom | tr -dc 'A-Z0-9' | fold -w $1 | head -n 1)"
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function cDir() {
+    if [ ! -z "$1" ]; then
+        if [ "$2" != "-f" ]; then
+            [ ! -d ~/$1 ] && mkdir ~/$1
+        else
+            [ -d ~/$1 ] && rm -rf ~/$1
+            mkdir ~/$1
+        fi
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function cFile() {
+    if [ ! -z "$1" ]; then
+        if [ "$2" != "-f" ]; then
+            [ ! -f ~/$1 ] && touch ~/$1
+        else
+            [ -f ~/$1 ] && rm ~/$1
+            touch ~/$1
+        fi
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function dbdata() {
+    if [ ! -z "$1" ] || [ ! -z "$2" ]; then
+        if [ "$1" = "cFile" ]; then
+            cFile $(readVar DATABASE_HOME)/$2
+        elif [ "$1" = "wFile" ]; then
+            [ -z "$3" ] && log $FUNCNAME E "Not enough arguments."
+            echo "$3" > ~/$(readVar DATABASE_HOME)/$2
+        elif [ "$1" = "rFile" ]; then
+            [ -f ~/$(readVar DATABASE_HOME)/$2 ] && rm ~/$(readVar DATABASE_HOME)/$2
+        elif [ "$1" = "chFile" ]; then
+            if [ -f ~/$(readVar DATABASE_HOME)/$2 ]; then
+                echo "true"
+            else
+                echo "false"
+            fi
+        elif [ "$1" = "chDir" ]; then
+            if [ -d ~/$(readVar DATABASE_HOME)/$2 ]; then
+                echo "true"
+            else
+                echo "false"
+            fi
+        elif [ "$1" = "cDir" ]; then
+            [ ! -d ~/$(readVar DATABASE_HOME)/$2 ] && cDir $(readVar DATABASE_HOME)/$2
+        elif [ "$1" = "rDir" ]; then
+            [ -d ~/$(readVar DATABASE_HOME)/$2 ] && rm -rf ~/$(readVar DATABASE_HOME)/$2
+        else
+            log $FUNCNAME E "Unknown I/O operation."
+        fi
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function rFile() {
+    if [ ! -z "$1" ]; then
+        [ -f ~/$1 ] && rm ~/$1
+    else
+        log $FUNCNAME E "Not enough arguments."
+    fi
+}
+
+function dbready() {
+    log $FUNCNAME D "Working from database..."
+    setVar DATABASE_ID "$(randomString 4)"
+    log $FUNCNAME D "Making database tree..."
+    cDir .lmdw
+    cDir .lmdw/db
+    cDir .lmdw/db/$(readVar DATABASE_ID) -f
+    setVar DATABASE_HOME ".lmdw/db/$(readVar DATABASE_ID)"
+    
+    log $FUNCNAME D "DBID: $(readVar DATABASE_ID)"
+    log $FUNCNAME D "DBHM: $(readVar DATABASE_HOME)"
+}
+
+function checkConfigForExist() {
+    log $FUNCNAME D "Config list: $1"
+    for i in $1; do
+        log $FUNCNAME D "----------------------"
+        log $FUNCNAME D "Config: $i"
+        if [ -f ~/$(readVar DATABASE_HOME)/config/$i ]; then
+            log $FUNCNAME D "Status: exists"
+        else
+            log $FUNCNAME E "Config $i do not exist!"
+        fi
+    done
+    log $FUNCNAME D "----------------------"
+}
+
+function addDeviceBranches() {
+    log $FUNCNAME D "Config list: $1"
+    
+    
+    
+    echo
+}
+
+function dbpart() {
+    if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+        log $FUNCNAME E "Not enough arguments."
+    fi
+    
+    # lazy ass
+    if [ "$1" = "remove" ]; then
+        log $FUNCNAME W "Remove is not supported yet."
+        log $FUNCNAME W "Skipped command $0 $1 $2 $3 $4 $5"
+    fi
+    
+    case "$2" in
+    config)
+    [ -z "$4" ] && log $FUNCNAME E "Not enough arguments."
+    [ -z "$5" ] && log $FUNCNAME E "Not enough arguments."
+    dbdata cDir config
+    [ $(dbdata chDir "branch/$3") = "false" ] && log $FUNCNAME E "Branch $3 do not exist."
+    dbdata wFile branch/$3/$4 "$5"
+    dbdata cDir configBranches
+    dbdata cDir configBranches/$4
+    dbdata cFile configBranches/$4/$3
+    dbdata wFile config/$4 "$5"
+    ;;
+    device)
+    [ -z "$4" ] && log $FUNCNAME E "Not enough arguments."
+    dbdata cDir device
+    dbdata cDir deviceConfigs
+    dbdata cDir deviceConfigs/$3
+    for i in $4; do
+        log $FUNCNAME D "config $i, writing..."
+        dbdata cFile "deviceConfigs/$3/$i"
+    done
+    checkConfigForExist "$4"
+    dbdata wFile device/$3 "$4"
+    #addDeviceBranches "$4" "$3"
+    ;;
+    branch) 
+    dbdata cDir branch
+    dbdata cDir branch/$3
+    ;;
+    *) log $FUNCNAME E "Unknown target."
+    ;;
+    esac
+}
+
+function arrayCheck() {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        log $FUNCNAME E "Not enough arguments."
+    fi
+
+    for i in "$1"; do
+        if [ "$i" = "$2" ]; then
+            echo "true"
+            return;
+        fi
+    done
+    
+    echo "false"
+}
+
+function checkArguments() {
+    case "$(readVar DATABASE_SYNTAX_VERSION)" in
+        v0.1a) setVar AVAILIBLE_ARGUMENTS "null"
+        ;;
+        *) log $FUNCNAME E "Unknown database version."
+        ;;
+    esac
+    
+    if [ $(readVar DATABASE_SYNTAX_VERSION) != $(readVar SYNTAX_PARSER_VERSION) ]; then
+        log $FUNCNAME W "Database and parser syntax versions are different. $(readVar DATABASE_SYNTAX_VERSION) != $(readVar SYNTAX_PARSER_VERSION)"
+    fi
+    
+    setVar DATABASE_ARGUMENTS "$(grep '# \[LMDW DATABASE' ~/$(readVar DATABASE_HOME)/database | sed 's/# \[LMDW.*\] \[ARGS: //' | sed 's/\]//')"
+    if [ -z "$(readVar DATABASE_ARGUMENTS)" ]; then
+        log $FUNCNAME E "Arguments were not found."
+    fi
+    
+    for i in $(readVar DATABASE_ARGUMENTS); do
+        log $FUNCNAME D "----------------------"
+        log $FUNCNAME D "Argument: $i"
+        if [ $(arrayCheck $(readVar AVAILIBLE_ARGUMENTS) $i) = "true" ]; then
+            log $FUNCNAME D "Status: availible"
+        fi
+    done
+    log $FUNCNAME D "----------------------"
+}
+
+function dbutils() {
+    [ -z "$1" ] && log $FUNCNAME E "Not enough arguments."
+    
+    case "$1" in
+        syntaxCheck)
+        if [ -z "$(grep '# \[LMDW DATABASE' ~/$(readVar DATABASE_HOME)/database)" ]; then
+            log $FUNCNAME E "Database does not have LMDW_DATABASE header."
+        fi
+        TEMP_SYNTAX_VER="$(grep '# \[LMDW DATABASE' ~/$(readVar DATABASE_HOME)/database | sed 's/# \[//g' | sed 's/\[//g' | sed 's/\]//g' | sed 's/ ARGS.*//g' | sed 's/LMDW DATABASE //g')"
+        if [ -z "$TEMP_SYNTAX_VER" ]; then
+            log $FUNCNAME E "Unknown syntax version."
+        fi
+        setVar DATABASE_SYNTAX_VERSION "$TEMP_SYNTAX_VER"
+        ;;
+        argsCheck)
+        if [ -z "$(readVar DATABASE_SYNTAX_VERSION)" ]; then
+            log $FUNCNAME E "Unknown syntax version."
+        fi
+        checkArguments
+        ;;
+        *) log $FUNCNAME E "Utility $1 not found."
+        ;;
+    esac
+}
+
+function downloadDatabase() {
+    if [ "$(readVar LOCAL_DATABASE)" = "true" ]; then
+        log $FUNCNAME D "Skip downloading; database is local."
+        if [ ! -f "$(readVar LOCAL_DATABASE_PATH)" ]; then
+            log $FUNCNAME E "Couldn't found local database."
+        fi
+        cp $(readVar LOCAL_DATABASE_PATH) ~/$(readVar DATABASE_HOME)/database
+        
+    else
+        log $FUNCNAME D "Downloading database..."
+        [ "$(curl >/dev/null 2>/dev/null && echo $?)" = "127" ] && log E "Curl is not installed."
+        curl $(readVar DATABASE_URL) 2>/tmp/.lmdw.curl.log > ~/$(readVar DATABASE_HOME)/database
+        if [ "$?" != "0" ]; then
+            log $FUNCNAME W "$(cat /tmp/.lmdw.curl.log)"
+            log $FUNCNAME E "Download failed."
+        fi
+    fi
+    
+    log $FUNCNAME D "Start database syntax check..."
+    dbutils syntaxCheck
+    log $FUNCNAME D "Syntax version: $(readVar DATABASE_SYNTAX_VERSION)"
+    log $FUNCNAME D "Parser syntax version: $(readVar SYNTAX_PARSER_VERSION)"
+    log $FUNCNAME D "Start database arguments parser..."
+    dbutils argsCheck
+    log $FUNCNAME D "Availible arguments: $(readVar AVAILIBLE_ARGUMENTS)"
+    log $FUNCNAME D "Database arguments: $(readVar DATABASE_ARGUMENTS)"
+}
+
+# TODO: Add some checks to this function
+function createDeviceBranchesStructure() {
+    dbdata cDir deviceBranches
+    for b in $(ls ~/$(readVar DATABASE_HOME)/device); do
+        log $FUNCNAME D "---------------"
+        log $FUNCNAME D "device: $b"
+        dbdata cDir deviceBranches/$b
+        for a in $(cat ~/$(readVar DATABASE_HOME)/device/$b); do
+            log $FUNCNAME D "config: $a"
+            
+            for i in $(ls ~/$(readVar DATABASE_HOME)/configBranches/$a); do
+                log $FUNCNAME D "branch: $i"
+                dbdata cFile deviceBranches/$b/$i
+            done
+        done
+    done
+    log $FUNCNAME D "---------------"
+}
+
+function loadDatabase() {
+    dbready
+    downloadDatabase
+    
+    export dbpart="dbpart"
+    source ~/$(readVar DATABASE_HOME)/database
+    
+    createDeviceBranchesStructure
+}
+
+function downloadManifest() {
+    if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ]; then
+        log $FUNCNAME E "Not enough arguments."
+    fi
+    
+    [ "$(dbdata chFile device/$1)" = "false" ] && log $FUNCNAME E "Device $1 do not exist."
+    [ -z "$(cat ~/$(readVar DATABASE_HOME)/device/$1)" ] && log $FUNCNAME E "Device $1 do not have any configs."
+    [ "$(dbdata chDir branch/$2)" = "false" ] && log $FUNCNAME E "Branch $2 do not exist."
+    for i in $(cat ~/$(readVar DATABASE_HOME)/device/$1); do
+        log $FUNCNAME D "----------------"
+        log $FUNCNAME D "Config: $i"
+        log $FUNCNAME D "Branch: $2"
+        [ "$(dbdata chFile "branch/$2/$i")" = "false" ] && log $FUNCNAME E "Config $i for branch $2 not found."
+        [ -z "$(cat ~/$(readVar DATABASE_HOME)/branch/$2/$i)" ] && log $FUNCNAME E "Config $i for branch $2 is empty."
+        log $FUNCNAME D "Status: OK"
+        
+        echo "$(cat ~/$(readVar DATABASE_HOME)/branch/$2/$i)" >> ~/$(readVar DATABASE_HOME)/downloadLinks
+    done
+    log $FUNCNAME D "----------------"
+    
+    [ ! -d "$3/.repo" ] && log $FUNCNAME E ".repo folder in $3 was not found!"
+    
+    for i in $(cat ~/$(readVar DATABASE_HOME)/downloadLinks); do
+        TEMP_CONFIG_NAME="$(randomString 8).xml"
+        log $FUNCNAME D "Downloading $i to $TEMP_CONFIG_NAME"
+        [ ! -d $3/.repo/local_manifests ] && mkdir $3/.repo/local_manifests
+        curl $i 2>/dev/null > $3/.repo/local_manifests/$TEMP_CONFIG_NAME
+    done
+    
+    log $FUNCNAME D "Done!"
+}
+
+function listAllDevices() {
+    j=1
+    for i in $(ls ~/$(readVar DATABASE_HOME)/device); do
+        echo -ne $wc"$j) $nc$i "$nc
+        setVar $i $j
+        ((j++))
+    done
+    echo
+}
+
+function checkChosen() {
+    if [ -z "$1" ] || [ -z "$2" ]; then
+        log $FUNCNAME E "Not enough arguments."
+    fi
+    
+    case "$1" in
+        device) 
+        for i in $(ls ~/$(readVar DATABASE_HOME)/device); do
+            if [ "$i" = "$2" ]; then
+                setVar USER_DEVICE "$2"
+                log $FUNCNAME D "Device $(readVar USER_DEVICE) found."
+                return;
+            elif [ "$(readVar $i)" = "$2" ]; then
+                setVar USER_DEVICE "$i"
+                log $FUNCNAME D "Device $(readVar USER_DEVICE) found."
+                return;
+            fi
+        done
+        log $FUNCNAME E "Device $2 was not found."
+        ;;
+        branch)
+        for i in $(ls ~/$(readVar DATABASE_HOME)/deviceBranches/$(readVar USER_DEVICE)); do
+            if [ "$i" = "$2" ]; then
+                log $FUNCNAME D "Branch $i found."
+                return;
+            fi
+        done
+        log $FUNCNAME E "Branch $2 was not found. Maybe you have typed NUMBER of branch?"
+        ;;
+        *) log $FUNCNAME E "Check type $1 not found."
+        ;;
+    esac
+}
+
+function listBranches() {
+    j=1
+    for i in $(ls ~/$(readVar DATABASE_HOME)/deviceBranches/$(readVar USER_DEVICE)); do
+        echo -ne $wc"$j) $nc$i "$nc
+        ((j++))
+    done
+    echo
+}
+
+function drawCLI() {
+    #setVar LOG_DEBUG false # this will save UI cool look
+    setVar VERSION "v0.1a"
+    
+    echo -e $wc"[ LMDW $(readVar VERSION) ]"$nc
+    echo -e $wc"- Fast and powerful local manifest installer."$nc
+    echo -e $wc"---------------------------------------------"$nc
+    echo -e $wc"Welcome! "$nc"Please, select your device below:"$nc
+    listAllDevices
+    echo -ne $wc"lmdw> "$nc
+    read device
+    [ -z "$device" ] && log $FUNCNAME E "You didn't give device name or number."
+    checkChosen device "$device"
+    echo -e $wc"Branches. "$nc"Please, select your branch below:"$nc
+    listBranches
+    echo -ne $wc"lmdw> "$nc
+    read branch
+    [ -z "$branch" ] && log $FUNCNAME E "You didn't give branch name."
+    checkChosen branch "$branch"
+    echo -e $wc"Sources directory. "$nc"Please, select your sources directory below:"$nc
+    echo -ne $wc"lmdw> "$nc
+    read folder
+    [ -z "$folder" ] && log $FUNCNAME E "You didn't give folder path.."
+    [ ! -d "$folder" ] && log $FUNCNAME E "Folder doesn't exist."
+    echo -e $wc"Downloading manifest. "$nc"Please wait..."$nc
+    downloadManifest "$(readVar USER_DEVICE)" "$branch" "$folder"
+    echo -e $wc"Done! "$nc"Now you should do 'repo sync' in $folder."$nc
+}
+
+function cleanMyself() {
+    j=0
+    for i in $(ls ~/.lmdw/db); do ((j++)); done
+    if [ $j -gt $(readVar DIRTY_COUNT) ]; then
+        log $FUNCNAME I "Cleaning database folder..."
+        rm -rf ~/.lmdw
+    fi
+}
+
+function mainFunction() {
+    cleanMyself;
+    loadDatabase;
+    drawCLI;
+}
+
+mainFunction;

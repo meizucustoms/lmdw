@@ -1,0 +1,18 @@
+# [LMDW DATABASE v0.1a] [ARGS: null]
+# Find syntax at: https://github.com/MeizuCustoms/lmdw/blob/master/lmdwSyntax/v0.1a.md
+
+# BRANCHES
+$dbpart add branch cm-14.1
+
+# CONFIGS
+$dbpart add config cm-14.1 main_m1721 \
+    "https://raw.githubusercontent.com/meizucustoms/local_manifest/master/mzlocal_nougat.xml"
+    
+# WARNING: YOU SHOULD ADD CONFIG FOR EACH BRANCH
+
+# DEVICES
+$dbpart add device m1721 "main_m1721"
+
+# also you can append many configs to one device
+
+# $dbpart add device m1721 "main_m1721 second_m1721 triple_m1721"
