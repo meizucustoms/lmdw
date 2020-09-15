@@ -18,7 +18,7 @@ Example:
 $dbpart add branch master
 
 # 2: Configs
-$dbpart add config mysuperconfig \
+$dbpart add config master mysuperconfig \
     mysuperlink.to/manifest.xml
     
 # 3: Devices
